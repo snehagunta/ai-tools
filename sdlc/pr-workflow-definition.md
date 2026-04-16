@@ -1,13 +1,15 @@
 # PR Workflow Definition
 
-**Version:** 1.2.0  
+**Version:** 1.3.0  
 **Last Updated:** 2026-04-16  
 **Status:** Active
 
-**Recent Changes (v1.2.0):**
-- Added JIRA ticket auto-extraction from branch name for PR titles
-- Made Stage 12 (Review Feedback) interactive with selective comment addressing
-- Improved PR title validation requirements
+**Recent Changes (v1.3.0):**
+- Added PR strategy decision: single PR vs separate PRs for tests and implementation
+- Added fresh context code review AFTER test implementation (Stage 8.5)
+- Added separate PR branch handling for test-only PRs
+- Made fresh context review a prerequisite for all commits/pushes
+- Allow user to change PR strategy mid-workflow
 
 This document defines the complete PR workflow process. It serves as the single source of truth for how PRs are created, reviewed, and merged.
 
@@ -285,6 +287,51 @@ The PR workflow is an opinionated, test-first process that ensures:
 
 ---
 
+### Stage 5.5: PR Strategy Decision
+
+**Goal:** Decide whether to use single PR or separate PRs for tests and implementation
+
+**Actions:**
+1. Ask user:
+   ```
+   How would you like to structure your PRs?
+   
+   1. Single PR - Tests and implementation together (simpler, faster)
+   2. Separate PRs - Test-only PR first, then implementation PR (safer for refactors)
+   
+   Recommendation:
+   - Single PR: Good for small features, bug fixes
+   - Separate PRs: Best for refactors, large features, risky changes
+   
+   Choice (1/2):
+   ```
+
+2. Store decision in workflow state
+3. Display choice:
+   ```
+   ✓ Using [Single PR / Separate PRs] strategy
+   
+   Note: You can change this decision later by telling me
+   "switch to single PR" or "switch to separate PRs"
+   ```
+
+**Success Criteria:**
+- User has chosen PR strategy
+- Strategy stored for later stages
+
+**Changing Your Mind:**
+User can say at any time:
+- "Actually, let's use separate PRs instead"
+- "Let's combine into a single PR"
+- "Switch to [single/separate] PR strategy"
+
+When strategy changes:
+- If already have test-only PR: Offer to close or merge first
+- If implementing: Adjust next steps accordingly
+- Update PLAN.md status to reflect new strategy
+
+---
+
 ### Stage 6: Test Plan Creation
 
 **Goal:** Create comprehensive test plan before any implementation
@@ -439,7 +486,8 @@ The PR workflow is an opinionated, test-first process that ensures:
    - Write failing tests first
    - One test at a time
    - Verify each test fails for the right reason
-3. Commit tests:
+3. **BEFORE COMMITTING:** Run fresh context code review (see Stage 8.5 below)
+4. After review approval, commit tests:
    ```bash
    git add [test files]
    git commit -m "RHCLOUD-45308: Implement tests for [feature]
@@ -448,31 +496,158 @@ The PR workflow is an opinionated, test-first process that ensures:
    - Add [test case 2]
    - All tests currently fail (as expected - no implementation yet)
    
+   Reviewed-by: Fresh Context Agent
    Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
    ```
-4. Push:
+5. Run linter:
+   ```bash
+   make lint
+   ```
+6. Push:
    ```bash
    git push
    ```
-5. Update PR description:
+7. Update PR description based on strategy:
+   
+   **If Single PR:**
    ```markdown
    ### Stage: Tests Implemented
    
-   1. ✅ Test plan created
-   2. ✅ Test plan approved
-   3. ✅ Tests implemented
-   4. ⏳ Awaiting test review
-   5. ⏳ Implementation plan
-   ...
+   1. ✅ Test plan created & approved
+   2. ✅ Tests implemented & reviewed
+   3. ⏳ Awaiting `/lgtm` to proceed to implementation plan
+   ```
    
-   **Comment `/lgtm` to approve tests and proceed to implementation planning.**
+   **If Separate PRs:**
+   ```markdown
+   ### Stage: Test-Only PR
+   
+   1. ✅ Test plan created & approved
+   2. ✅ Tests implemented & reviewed
+   3. ⏳ Awaiting `/lgtm` to merge test-only PR
+   
+   **After merge, will create new PR for implementation.**
    ```
 
 **Success Criteria:**
 - All planned tests implemented
-- Tests fail for expected reasons
+- Tests reviewed by fresh context agent
+- All issues addressed
+- Lint passing
+- Tests fail for expected reasons (RED phase)
 - Committed and pushed
-- Awaiting `/lgtm`
+
+**IMPORTANT:** Never commit or push without fresh context review first.
+
+---
+
+### Stage 8.5: Fresh Context Test Review
+
+**Goal:** Get objective review of tests before committing
+
+**Actions:**
+1. **BEFORE any commit/push**, launch code review agent:
+   ```
+   "Launch a code review agent for test code review:
+   
+   **Important: Use fresh context - no knowledge of test implementation.**
+   
+   Agent task:
+   - Read PLAN.md to understand test requirements
+   - Review test changes: git diff --cached or git diff main
+   - Check for:
+     * Test coverage completeness
+     * Test clarity and maintainability
+     * Edge cases covered
+     * Error scenarios tested
+     * Test naming conventions
+     * Unnecessary mocks vs fakes
+     * Performance concerns (test speed)
+   - Create TEST_REVIEW.md with findings
+   - Report findings
+   
+   Use worktree isolation if possible."
+   ```
+
+2. Agent creates `TEST_REVIEW.md`:
+   ```markdown
+   ## Test Code Review
+   
+   ### Test Coverage
+   [Are all test cases from PLAN.md implemented?]
+   
+   ### Test Quality
+   [Clarity, maintainability, naming]
+   
+   ### Edge Cases & Errors
+   [Are edge cases and error scenarios covered?]
+   
+   ### Testing Patterns
+   [Using fakes over mocks? Appropriate test isolation?]
+   
+   ### Specific Issues
+   1. File: path/to/test.go:123
+      - Issue: [description]
+      - Suggestion: [fix]
+   
+   ### Recommendation
+   [Approve / Approve with minor fixes / Needs revision]
+   ```
+
+3. Address any issues raised
+4. Only proceed to commit after approval
+
+**Success Criteria:**
+- Fresh context agent completes test review
+- TEST_REVIEW.md created
+- All issues addressed
+- Agent approves tests
+
+**CRITICAL RULE:** No code commits (test or implementation) without fresh context review first.
+
+---
+
+### Stage 8.5.1: Separate PR Branch Handling (If Applicable)
+
+**Goal:** For separate PR strategy, create test-only PR and prepare for implementation PR
+
+**Actions:**
+
+**Only applies if user chose "Separate PRs" in Stage 5.5**
+
+1. Wait for test PR approval (`/lgtm`)
+2. Merge test-only PR:
+   ```bash
+   gh pr merge --squash
+   ```
+3. Checkout main and pull:
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+4. Create new branch for implementation:
+   ```bash
+   # New branch name format: JIRA-123-implementation-description
+   # Example: RHCLOUD-45308-implement-spicedb-repository
+   git checkout -b RHCLOUD-45308-implement-[description]
+   ```
+5. Update Jira:
+   ```
+   ✅ Test-only PR merged: [PR URL]
+   
+   Starting implementation PR: [new branch name]
+   ```
+6. Skip to Stage 9 (Implementation Plan Creation)
+
+**Success Criteria:**
+- Test-only PR merged to main
+- New implementation branch created
+- On new branch ready for implementation
+- Jira updated
+
+**If Single PR:**
+- Skip this stage entirely
+- Continue to Stage 9 on same branch
 
 ---
 
@@ -545,12 +720,30 @@ The PR workflow is an opinionated, test-first process that ensures:
 
 **Actions:**
 1. Confirm implementation plan approval (`/lgtm`)
-2. Implement following TDD Red-Green-Refactor:
+
+2. **If Separate PRs:** Create implementation PR first:
+   ```bash
+   gh pr create \
+     --title "RHCLOUD-45308: Implement [description]" \
+     --body "## Implementation PR
+   
+   Jira: https://redhat.atlassian.net/browse/RHCLOUD-45308
+   
+   Depends on test PR: #[test-pr-number] (merged)
+   
+   See \`PLAN.md\` for implementation details."
+   ```
+
+3. Implement following TDD Red-Green-Refactor:
    - **RED:** Tests already fail (done in Stage 8)
    - **GREEN:** Write minimal code to make tests pass
    - **REFACTOR:** Clean up code while keeping tests passing
-3. Implement phase by phase from plan
-4. Commit logically:
+
+4. Implement phase by phase from plan
+
+5. **BEFORE each commit:** Run fresh context code review (similar to Stage 8.5)
+
+6. After review approval, commit logically:
    ```bash
    git commit -m "RHCLOUD-45308: Implement [phase name]
    
@@ -559,79 +752,102 @@ The PR workflow is an opinionated, test-first process that ensures:
    
    Tests passing: Test_[Name1], Test_[Name2]
    
+   Reviewed-by: Fresh Context Agent
    Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
    ```
-5. After all phases:
-   - Run full test suite
+
+7. After all phases:
+   - Run full test suite: `make test`
    - Verify all tests pass
+   - Run linter: `make lint`
    - Check test coverage
-6. Push:
+
+8. Push:
    ```bash
    git push
    ```
-7. Update PR:
+
+9. Update PR:
    ```markdown
    ### Stage: Implementation Complete
    
    1. ✅ Test plan created & approved
-   2. ✅ Tests implemented & approved
+   2. ✅ Tests implemented & reviewed
    3. ✅ Implementation plan created & approved
-   4. ✅ Code implemented
-   5. ⏳ Awaiting code review
+   4. ✅ Code implemented & reviewed
+   5. ⏳ Awaiting final code review
    ...
    
-   **Ready for code review.**
+   **Ready for final code review.**
    ```
 
 **Success Criteria:**
 - All phases implemented
+- Each phase reviewed by fresh context agent before commit
 - All tests passing
+- Linter passing
 - Code follows plan
 - Committed and pushed
 
+**IMPORTANT:** Every commit must be reviewed by fresh context agent first. No exceptions.
+
 ---
 
-### Stage 11: Fresh Context Code Review
+### Stage 11: Fresh Context Final Implementation Review
 
-**Goal:** Get objective code review from agent with no implementation knowledge
+**Goal:** Get comprehensive objective review of complete implementation
 
 **Actions:**
+
+**Note:** This is a final comprehensive review. Individual commits should have already been reviewed in Stage 10.
+
 1. Launch code review agent with fresh context:
    ```
-   "Launch a code review agent with these requirements:
+   "Launch a final code review agent with these requirements:
    
    **Important: Use fresh context - no knowledge of implementation.**
    
    Agent task:
-   - Read PLAN.md to understand intent
-   - Review changes: git diff main
+   - Read PLAN.md to understand overall intent
+   - Review ALL changes: git diff main
    - Check for:
-     * Plan adherence
-     * Code quality issues
+     * Overall plan adherence
+     * Code quality and patterns
      * Security/performance concerns
-     * Test adequacy
+     * Test adequacy and coverage
+     * Integration issues
      * Bugs or edge cases
-   - Create CODE_REVIEW.md with findings
+     * Documentation completeness
+   - Create FINAL_CODE_REVIEW.md with findings
    - Post review as PR comment
    
    Use worktree isolation if possible."
    ```
 
-2. Agent creates `CODE_REVIEW.md`:
+2. Agent creates `FINAL_CODE_REVIEW.md`:
    ```markdown
-   ## Code Review
+   ## Final Code Review
+   
+   ### Overall Assessment
+   [High-level view of the implementation]
    
    ### Plan Adherence
    [Does implementation match plan?]
    
    ### Code Quality
-   [Issues with structure, naming, patterns]
+   [Issues with structure, naming, patterns, consistency]
    
    ### Security & Performance
-   [Concerns?]
+   [Concerns? Optimizations needed?]
    
    ### Testing
-   [Adequate coverage?]
+   [Adequate coverage? Edge cases covered?]
+   
+   ### Integration
+   [Does it integrate well with existing code?]
+   
+   ### Documentation
+   [Is code self-documenting? Comments where needed?]
    
    ### Specific Issues
    1. File: path/to/file.go:123
@@ -639,14 +855,14 @@ The PR workflow is an opinionated, test-first process that ensures:
       - Suggestion: [fix]
    
    ### Recommendation
-   [Approve / Approve with minor fixes / Needs revision]
+   [Approve / Approve with minor fixes / Needs major revision]
    ```
 
 3. Agent posts review as PR comment
 
 **Success Criteria:**
-- Fresh context agent completes review
-- CODE_REVIEW.md created
+- Fresh context agent completes final review
+- FINAL_CODE_REVIEW.md created
 - Review posted to PR
 
 ---
@@ -799,6 +1015,66 @@ The PR workflow is an opinionated, test-first process that ensures:
 
 ---
 
+## Pre-Commit/Pre-Push Requirements
+
+**CRITICAL:** All code changes (tests or implementation) MUST be reviewed by a fresh context agent BEFORE committing.
+
+### Before Every Commit
+
+1. **Stage changes:**
+   ```bash
+   git add [files]
+   ```
+
+2. **Run fresh context review:**
+   - Launch agent with fresh context (no implementation knowledge)
+   - Agent reviews: `git diff --cached` (staged changes)
+   - Agent checks code quality, tests, security, patterns
+   - Agent approves or requests changes
+
+3. **Address issues if any**
+
+4. **Only after approval, commit:**
+   ```bash
+   git commit -m "..."
+   ```
+
+5. **Run linter:**
+   ```bash
+   make lint
+   ```
+
+6. **Push:**
+   ```bash
+   git push
+   ```
+
+### Review Frequency
+
+- **Test code:** Fresh review for each test commit (Stage 8.5)
+- **Implementation code:** Fresh review for each implementation commit (Stage 10)
+- **Final review:** Comprehensive review of all changes (Stage 11)
+
+### Why Fresh Context?
+
+Fresh context reviews ensure:
+- **Objectivity:** Agent has no preconceptions about the implementation
+- **Unbiased:** No knowledge of discussions or decisions made during development  
+- **Fresh eyes:** Catches issues that the implementer might miss
+- **Quality:** Enforces consistent standards across all code
+
+### Exceptions
+
+No exceptions. Even "trivial" changes get reviewed.
+
+Rationale:
+- "Trivial" changes often introduce bugs
+- Builds good habits
+- Prevents technical debt accumulation
+- Maintains code quality standards
+
+---
+
 ## Approval Mechanism
 
 All approval gates use `/lgtm` comments on the PR:
@@ -884,5 +1160,15 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.3.0 (2026-04-16): 
+  - Added Stage 5.5 - PR strategy decision (single vs separate PRs)
+  - Added Stage 8.5 - Fresh context test review before test commits
+  - Added Stage 8.5.1 - Separate PR branch handling
+  - Made fresh context review mandatory for all commits/pushes
+  - Added comprehensive pre-commit/pre-push requirements section
+  - Updated Stage 10 to require fresh context review for each implementation commit
+  - Updated Stage 11 to clarify it's a final comprehensive review
+  - Added ability to change PR strategy mid-workflow
+- 1.2.0 (2026-04-16): Added JIRA ticket auto-extraction and interactive review feedback
 - 1.1.0 (2026-04-16): Added Stage 1.5 - Support for continuing work on existing PRs
 - 1.0.0 (2026-04-16): Initial workflow definition
