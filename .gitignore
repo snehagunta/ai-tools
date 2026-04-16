@@ -1,0 +1,16 @@
+# Editor files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local test outputs
+*.log
+test-results/
+
+# Sensitive data
+.env
+.secrets
+
+# OS files
+Thumbs.db
