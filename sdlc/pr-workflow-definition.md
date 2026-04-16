@@ -1,6 +1,6 @@
 # PR Workflow Definition
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Last Updated:** 2026-04-16  
 **Status:** Active
 
@@ -55,9 +55,49 @@ The PR workflow is an opinionated, test-first process that ensures:
 
 ---
 
+### Stage 1.5: New or Existing PR Decision
+
+**Goal:** Determine if starting fresh or continuing existing work
+
+**Actions:**
+1. After git safety check completes, Claude asks:
+   ```
+   Is this a new PR or are you continuing work on an existing PR?
+   1. New PR - Start from Jira search
+   2. Existing PR - Resume current work
+   
+   Choice (1/2):
+   ```
+
+2. **If New PR (option 1):**
+   - Continue to Stage 2 (Jira Search)
+   - Follow full workflow from beginning
+
+3. **If Existing PR (option 2):**
+   - Detect current branch name
+   - Extract Jira ticket from branch name (e.g., RHCLOUD-46010 from RHCLOUD-46010-bring-tuples-endpoints)
+   - Find associated PR using `gh pr list`
+   - Ask: "What do you need to do?"
+     - Address review feedback (→ jump to Stage 12)
+     - Continue implementation (→ ask current stage)
+     - Update tests (→ jump to Stage 8-9)
+     - Update plan (→ jump to Stage 6 or 10)
+   - Load context: Read PLAN.md, PR description, recent commits
+
+**Success Criteria:**
+- User's intent is clear (new vs existing)
+- For existing: context loaded (branch, PR, Jira, PLAN.md)
+
+**Error Handling:**
+- Branch name doesn't match pattern → Ask for Jira ticket manually
+- No PR found → Offer to create PR
+- No PLAN.md found → Offer to create one
+
+---
+
 ### Stage 2: Jira Ticket Search & Selection
 
-**Goal:** Find and select appropriate Jira ticket
+**Goal:** Find and select appropriate Jira ticket (for new PRs)
 
 **Actions:**
 1. Prompt user: `"What ticket are you working on? (Enter keywords to search)"`
@@ -777,4 +817,5 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.1.0 (2026-04-16): Added Stage 1.5 - Support for continuing work on existing PRs
 - 1.0.0 (2026-04-16): Initial workflow definition
