@@ -1,8 +1,13 @@
 # PR Workflow Definition
 
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Last Updated:** 2026-04-16  
 **Status:** Active
+
+**Recent Changes (v1.2.0):**
+- Added JIRA ticket auto-extraction from branch name for PR titles
+- Made Stage 12 (Review Feedback) interactive with selective comment addressing
+- Improved PR title validation requirements
 
 This document defines the complete PR workflow process. It serves as the single source of truth for how PRs are created, reviewed, and merged.
 
@@ -370,8 +375,14 @@ The PR workflow is an opinionated, test-first process that ensures:
 **Goal:** Get test plan reviewed before implementation
 
 **Actions:**
-1. Create PR:
+1. Extract JIRA ticket from branch name:
+   - Branch format: `RHCLOUD-45308-description`
+   - Extract: `RHCLOUD-45308`
+   - If extraction fails, ask user for JIRA ticket
+
+2. Create PR with JIRA ticket in title:
    ```bash
+   # Title format: "JIRA-TICKET: brief-description"
    gh pr create \
      --title "RHCLOUD-45308: embed-spicedb-repository" \
      --body "## Test Plan
@@ -382,7 +393,7 @@ The PR workflow is an opinionated, test-first process that ensures:
    
    This PR contains the test plan for implementing [feature].
    
-   See `PLAN.md` for comprehensive test strategy.
+   See \`PLAN.md\` for comprehensive test strategy.
    
    ### Next Steps
    1. ✅ Test plan created
@@ -393,9 +404,11 @@ The PR workflow is an opinionated, test-first process that ensures:
    6. ⏳ Code review
    7. ⏳ Merge
    
-   **Comment `/lgtm` to approve test plan and proceed to test implementation.**
+   **Comment \`/lgtm\` to approve test plan and proceed to test implementation.**
    "
    ```
+
+   **IMPORTANT:** PR title MUST include JIRA ticket number. GitHub workflow checks require this format.
 
 2. Add comment to Jira:
    ```
@@ -643,39 +656,93 @@ The PR workflow is an opinionated, test-first process that ensures:
 **Goal:** Fix issues identified in code review
 
 **Actions:**
-1. Read CODE_REVIEW.md
-2. Address each issue:
-   - Fix the problem
+
+1. **Detect PR and fetch comments:**
+   ```bash
+   # Get current branch and extract JIRA ticket
+   BRANCH=$(git branch --show-current)
+   JIRA=$(echo $BRANCH | grep -oE 'RHCLOUD-[0-9]+')
+   
+   # Find PR for this branch
+   PR_NUM=$(gh pr list --head $BRANCH --json number --jq '.[0].number')
+   
+   # Fetch PR comments
+   gh pr view $PR_NUM
+   ```
+
+2. **Interactive comment selection:**
+   
+   Claude presents comments with numbers:
+   ```
+   PR Comments for review:
+   
+   1. [user-alice] Line 45 in auth.go:
+      "This should use context.WithTimeout instead of bare context"
+   
+   2. [user-bob] Line 123 in handler.go:
+      "Add error handling for nil pointer"
+   
+   3. [user-alice] General comment:
+      "Great work! Just minor suggestions above"
+   
+   Which comments would you like to address?
+   - Type "all" to address all comments
+   - Type comment numbers (e.g., "1,2" or "1 2")
+   - Type "skip" to skip addressing feedback
+   
+   Your choice:
+   ```
+
+3. **Address selected comments:**
+   
+   For each selected comment:
+   - Read the comment context
+   - Fix the issue
    - Verify fix with tests
-   - Commit:
+   - Commit with reference:
      ```bash
-     git commit -m "RHCLOUD-45308: Address review - [what was fixed]
+     git commit -m "Address PR review comment #1
      
-     Fixed: [issue from CODE_REVIEW.md]
+     Fixed: Use context.WithTimeout in auth.go (comment by user-alice)
      
      Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
      ```
-3. Update CODE_REVIEW.md (check off addressed items)
-4. Push all changes:
+
+4. **Track progress:**
+   - Mark addressed comments
+   - Show remaining comments
+   - Ask if user wants to address more
+
+5. **Push changes:**
    ```bash
    git push
    ```
-5. Update PR:
-   ```markdown
-   ### Stage: Review Feedback Addressed
+
+6. **Add PR comment summarizing changes:**
+   ```bash
+   gh pr comment $PR_NUM --body "### Review feedback addressed
    
-   1. ✅ Code review complete
-   2. ✅ Feedback addressed
-   3. ⏳ Awaiting final approval
+   ✅ Addressed comments: #1, #2
    
-   **Ready for final review and merge.**
+   **Changes:**
+   - Comment #1: Use context.WithTimeout in auth.go
+   - Comment #2: Add nil pointer checks in handler.go
+   
+   Ready for re-review."
    ```
 
 **Success Criteria:**
-- All review issues addressed
+- Selected review issues addressed
 - Tests still passing
-- CODE_REVIEW.md updated
+- Changes committed with comment references
 - Changes pushed
+- PR updated with summary
+
+**Interactive Flow:**
+- User can address comments incrementally
+- User can skip non-critical comments
+- Clear tracking of which comments are addressed
+- Each commit references specific comment
 
 ---
 
