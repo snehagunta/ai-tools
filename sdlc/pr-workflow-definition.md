@@ -1,10 +1,15 @@
 # PR Workflow Definition
 
-**Version:** 1.3.0  
-**Last Updated:** 2026-04-16  
+**Version:** 1.3.1  
+**Last Updated:** 2026-04-17  
 **Status:** Active
 
-**Recent Changes (v1.3.0):**
+**Recent Changes (v1.3.1):**
+- Updated Stage 8.5.1: Allow creating implementation branch before test PR merge
+- Added Option 2: Create implementation branch from test branch to start work sooner
+- Added rebase instructions for implementation branch after test PR merge
+
+**Changes (v1.3.0):**
 - Added PR strategy decision: single PR vs separate PRs for tests and implementation
 - Added fresh context code review AFTER test implementation (Stage 8.5)
 - Added separate PR branch handling for test-only PRs
@@ -615,35 +620,85 @@ When strategy changes:
 
 **Only applies if user chose "Separate PRs" in Stage 5.5**
 
-1. Wait for test PR approval (`/lgtm`)
-2. Merge test-only PR:
+1. Ask user:
+   ```
+   Test PR ready. How would you like to proceed?
+   
+   1. Wait for test PR approval/merge, then create implementation branch (safer)
+   2. Create implementation branch now from test branch (start work sooner)
+   
+   Recommendation:
+   - Option 1: Best if test PR might need significant changes
+   - Option 2: Best if tests are solid and you want to start implementation
+   
+   Choice (1/2):
+   ```
+
+**Option 1: Merge Test PR First (Original Flow)**
+
+2a. Wait for test PR approval (`/lgtm`)
+3a. Merge test-only PR:
    ```bash
    gh pr merge --squash
    ```
-3. Checkout main and pull:
+4a. Checkout main and pull:
    ```bash
    git checkout main
    git pull origin main
    ```
-4. Create new branch for implementation:
+5a. Create new branch for implementation:
    ```bash
    # New branch name format: JIRA-123-implementation-description
    # Example: RHCLOUD-45308-implement-spicedb-repository
    git checkout -b RHCLOUD-45308-implement-[description]
    ```
-5. Update Jira:
+6a. Update Jira:
    ```
    ✅ Test-only PR merged: [PR URL]
    
    Starting implementation PR: [new branch name]
    ```
-6. Skip to Stage 9 (Implementation Plan Creation)
+
+**Option 2: Create Implementation Branch Now**
+
+2b. Create new branch from current test branch:
+   ```bash
+   # New branch name format: JIRA-123-implementation-description
+   # Example: RHCLOUD-45308-implement-spicedb-repository
+   git checkout -b RHCLOUD-45308-implement-[description]
+   ```
+3b. Note in Jira:
+   ```
+   Test PR pending: [test PR URL]
+   
+   Starting implementation on separate branch: [impl branch name]
+   
+   Implementation branch created from test branch.
+   Will rebase onto main after test PR merges.
+   ```
+4b. **Important:** After test PR merges, rebase implementation branch:
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout RHCLOUD-45308-implement-[description]
+   git rebase main
+   # Resolve conflicts if any
+   git push --force-with-lease
+   ```
 
 **Success Criteria:**
+
+**Option 1:**
 - Test-only PR merged to main
-- New implementation branch created
+- New implementation branch created from main
 - On new branch ready for implementation
 - Jira updated
+
+**Option 2:**
+- New implementation branch created from test branch
+- On new branch ready for implementation
+- Jira updated with note about pending test PR
+- User reminded to rebase after test PR merge
 
 **If Single PR:**
 - Skip this stage entirely
@@ -1160,6 +1215,10 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.3.1 (2026-04-17):
+  - Updated Stage 8.5.1 - Added option to create implementation branch before test PR merge
+  - Added Option 2 to Stage 8.5.1 - Branch from test branch to start implementation sooner
+  - Added rebase instructions for implementation branch after test PR merges
 - 1.3.0 (2026-04-16): 
   - Added Stage 5.5 - PR strategy decision (single vs separate PRs)
   - Added Stage 8.5 - Fresh context test review before test commits
