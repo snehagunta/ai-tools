@@ -1,10 +1,16 @@
 # PR Workflow Definition
 
-**Version:** 1.3.1  
-**Last Updated:** 2026-04-17  
+**Version:** 1.4.0  
+**Last Updated:** 2026-04-20  
 **Status:** Active
 
-**Recent Changes (v1.3.1):**
+**Recent Changes (v1.4.0):**
+- **Breaking:** Changed from `PLAN.md` to `PLAN-${JIRA_TICKET}.md` (e.g., `PLAN-RHCLOUD-45010.md`)
+- Allows multiple concurrent PRs without file conflicts
+- Added guidance on referencing Cursor plans from workflow PLAN files
+- PLAN files can reference detailed implementation plans (e.g., Cursor plans) instead of duplicating content
+
+**Changes (v1.3.1):**
 - Updated Stage 8.5.1: Allow creating implementation branch before test PR merge
 - Added Option 2: Create implementation branch from test branch to start work sooner
 - Added rebase instructions for implementation branch after test PR merge
@@ -94,16 +100,16 @@ The PR workflow is an opinionated, test-first process that ensures:
      - Continue implementation (→ ask current stage)
      - Update tests (→ jump to Stage 8-9)
      - Update plan (→ jump to Stage 6 or 10)
-   - Load context: Read PLAN.md, PR description, recent commits
+   - Load context: Read PLAN-${JIRA_TICKET}.md, PR description, recent commits
 
 **Success Criteria:**
 - User's intent is clear (new vs existing)
-- For existing: context loaded (branch, PR, Jira, PLAN.md)
+- For existing: context loaded (branch, PR, Jira, PLAN-${JIRA_TICKET}.md)
 
 **Error Handling:**
 - Branch name doesn't match pattern → Ask for Jira ticket manually
 - No PR found → Offer to create PR
-- No PLAN.md found → Offer to create one
+- No PLAN-${JIRA_TICKET}.md found → Offer to create one
 
 ---
 
@@ -333,7 +339,7 @@ User can say at any time:
 When strategy changes:
 - If already have test-only PR: Offer to close or merge first
 - If implementing: Adjust next steps accordingly
-- Update PLAN.md status to reflect new strategy
+- Update PLAN-${JIRA_TICKET}.md status to reflect new strategy
 
 ---
 
@@ -342,7 +348,7 @@ When strategy changes:
 **Goal:** Create comprehensive test plan before any implementation
 
 **Actions:**
-1. Create `PLAN.md` file with structure:
+1. Create `PLAN-${JIRA_TICKET}.md` file (e.g., `PLAN-RHCLOUD-45308.md`) with structure:
    ```markdown
    ---
    jira: RHCLOUD-45308
@@ -399,13 +405,13 @@ When strategy changes:
    [To be added after test plan approved]
    ```
 
-2. Commit PLAN.md:
+2. Commit plan file:
    ```bash
-   git add PLAN.md
+   git add PLAN-RHCLOUD-45308.md
    git commit -m "RHCLOUD-45308: Add test plan
    
    Test-first plan for [feature/refactor].
-   See PLAN.md for comprehensive test strategy.
+   See PLAN-RHCLOUD-45308.md for comprehensive test strategy.
    
    Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
    ```
@@ -416,9 +422,40 @@ When strategy changes:
    ```
 
 **Success Criteria:**
-- PLAN.md created with comprehensive test plan
+- PLAN-${JIRA_TICKET}.md created with comprehensive test plan
 - Committed to branch
 - Pushed to remote
+
+**File Naming:**
+- Use pattern: `PLAN-${JIRA_TICKET}.md`
+- Example: `PLAN-RHCLOUD-45308.md`
+- Allows multiple concurrent PRs without conflicts
+- Easy to find: `ls PLAN-*.md`
+
+**Integration with Tool-Specific Plans (Cursor, etc.):**
+
+If you have detailed plans from development tools (e.g., Cursor plans in `.cursor/plans/`), you can reference them from the workflow PLAN file instead of duplicating content:
+
+```markdown
+## Implementation Plan
+
+**Detailed implementation:** See Cursor plan at `.cursor/plans/feature_name_abc123.plan.md`
+
+**Summary:**
+- Phase 1: [High-level description]
+- Phase 2: [High-level description]
+[...]
+
+**Key decisions:**
+- [Decision 1 and rationale]
+- [Decision 2 and rationale]
+```
+
+This approach:
+- Avoids duplication
+- Lets tools manage their own detailed plans
+- Provides reviewers with context + link to details
+- Both files coexist and serve different purposes
 
 ---
 
@@ -445,7 +482,7 @@ When strategy changes:
    
    This PR contains the test plan for implementing [feature].
    
-   See \`PLAN.md\` for comprehensive test strategy.
+   See \`PLAN-RHCLOUD-45308.md\` for comprehensive test strategy.
    
    ### Next Steps
    1. ✅ Test plan created
@@ -558,7 +595,7 @@ When strategy changes:
    **Important: Use fresh context - no knowledge of test implementation.**
    
    Agent task:
-   - Read PLAN.md to understand test requirements
+   - Read PLAN-${JIRA_TICKET}.md to understand test requirements
    - Review test changes: git diff --cached or git diff main
    - Check for:
      * Test coverage completeness
@@ -579,7 +616,7 @@ When strategy changes:
    ## Test Code Review
    
    ### Test Coverage
-   [Are all test cases from PLAN.md implemented?]
+   [Are all test cases from PLAN-${JIRA_TICKET}.md implemented?]
    
    ### Test Quality
    [Clarity, maintainability, naming]
@@ -712,7 +749,7 @@ When strategy changes:
 
 **Actions:**
 1. Confirm test approval (`/lgtm` received)
-2. Update `PLAN.md` with implementation section:
+2. Update `PLAN-${JIRA_TICKET}.md` with implementation section:
    ```markdown
    ## Implementation Plan
    
@@ -738,11 +775,11 @@ When strategy changes:
 
 3. Commit:
    ```bash
-   git add PLAN.md
+   git add PLAN-RHCLOUD-45308.md
    git commit -m "RHCLOUD-45308: Add implementation plan
    
    Implementation strategy for [feature].
-   See Implementation Plan section in PLAN.md.
+   See Implementation Plan section in PLAN-RHCLOUD-45308.md.
    
    Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
    ```
@@ -763,7 +800,7 @@ When strategy changes:
    ```
 
 **Success Criteria:**
-- Implementation plan added to PLAN.md
+- Implementation plan added to PLAN-${JIRA_TICKET}.md
 - Committed and pushed
 - Awaiting `/lgtm`
 
@@ -786,7 +823,7 @@ When strategy changes:
    
    Depends on test PR: #[test-pr-number] (merged)
    
-   See \`PLAN.md\` for implementation details."
+   See \`PLAN-RHCLOUD-45308.md\` for implementation details."
    ```
 
 3. Implement following TDD Red-Green-Refactor:
@@ -863,7 +900,7 @@ When strategy changes:
    **Important: Use fresh context - no knowledge of implementation.**
    
    Agent task:
-   - Read PLAN.md to understand overall intent
+   - Read PLAN-${JIRA_TICKET}.md to understand overall intent
    - Review ALL changes: git diff main
    - Check for:
      * Overall plan adherence
@@ -1134,7 +1171,7 @@ Rationale:
 
 All approval gates use `/lgtm` comments on the PR:
 
-- **Test Plan Approval:** Comment `/lgtm` after reviewing `PLAN.md` test section
+- **Test Plan Approval:** Comment `/lgtm` after reviewing `PLAN-${JIRA_TICKET}.md` test section
 - **Test Implementation Approval:** Comment `/lgtm` after reviewing test code
 - **Implementation Plan Approval:** Comment `/lgtm` after reviewing implementation section
 - **Final Merge:** Use GitHub's approval system (required reviewer approval)
@@ -1215,6 +1252,12 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.4.0 (2026-04-20):
+  - **Breaking:** Changed from `PLAN.md` to `PLAN-${JIRA_TICKET}.md` for multi-PR support
+  - Updated all stages to use per-ticket plan files (e.g., `PLAN-RHCLOUD-45010.md`)
+  - Added guidance on integrating with tool-specific plans (Cursor, etc.)
+  - PLAN files can reference external detailed plans instead of duplicating
+  - Allows multiple concurrent PRs without file conflicts
 - 1.3.1 (2026-04-17):
   - Updated Stage 8.5.1 - Added option to create implementation branch before test PR merge
   - Added Option 2 to Stage 8.5.1 - Branch from test branch to start implementation sooner
