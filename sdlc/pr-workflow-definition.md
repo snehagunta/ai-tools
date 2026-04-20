@@ -1,10 +1,16 @@
 # PR Workflow Definition
 
-**Version:** 1.4.1  
+**Version:** 1.4.2  
 **Last Updated:** 2026-04-20  
 **Status:** Active
 
-**Recent Changes (v1.4.1):**
+**Recent Changes (v1.4.2):**
+- **Critical Fix:** Changed sync to use `upstream main` instead of `origin main`
+- Ensures syncing with canonical repo, not just user's fork
+- Added upstream remote setup instructions
+- Prevents issues where fork is behind upstream
+
+**Changes (v1.4.1):**
 - Added automatic sync with main before creating PRs (Stage 7 and Stage 10)
 - Ensures all PRs are based on latest main
 - Prevents merge conflicts and keeps history clean
@@ -60,7 +66,7 @@ The PR workflow is an opinionated, test-first process that ensures:
    - Warn user to stash changes
    - Give 3 attempts
    - After 3 attempts: abort with message "We prefer a clean slate to keep workflow manageable"
-5. Pull latest from remote (`git pull origin main`)
+5. Pull latest from upstream (`git pull upstream main` then `git push origin main`)
 6. Display remote details:
    - Remote name
    - Remote URL
@@ -473,14 +479,20 @@ This approach:
 1. **Sync with main before creating PR:**
    ```bash
    git checkout main
-   git pull origin main
+   git pull upstream main    # Pull from upstream (canonical repo), not origin (your fork)
+   git push origin main       # Update your fork
    git checkout RHCLOUD-45308-description
    git rebase main
    # Resolve conflicts if any
    git push --force-with-lease
    ```
    
-   **Why:** Ensures PR is based on latest main, prevents merge conflicts, keeps history clean
+   **Why:** Ensures PR is based on latest upstream main, prevents merge conflicts, keeps history clean
+   
+   **Note:** If `upstream` remote doesn't exist, add it once:
+   ```bash
+   git remote add upstream git@github.com:project-kessel/inventory-api.git
+   ```
 
 2. Extract JIRA ticket from branch name:
    - Branch format: `RHCLOUD-45308-description`
@@ -696,10 +708,11 @@ This approach:
    ```bash
    gh pr merge --squash
    ```
-4a. Checkout main and pull:
+4a. Checkout main and pull from upstream:
    ```bash
    git checkout main
-   git pull origin main
+   git pull upstream main
+   git push origin main
    ```
 5a. Create new branch for implementation:
    ```bash
@@ -734,7 +747,8 @@ This approach:
 4b. **Important:** After test PR merges, rebase implementation branch:
    ```bash
    git checkout main
-   git pull origin main
+   git pull upstream main
+   git push origin main
    git checkout RHCLOUD-45308-implement-[description]
    git rebase main
    # Resolve conflicts if any
@@ -834,7 +848,8 @@ This approach:
 2. **Sync with main before creating PR (if creating new PR):**
    ```bash
    git checkout main
-   git pull origin main
+   git pull upstream main    # Pull from upstream (canonical repo), not origin (your fork)
+   git push origin main       # Update your fork
    git checkout RHCLOUD-45308-implement-[description]
    git rebase main
    # Resolve conflicts if any
@@ -844,6 +859,10 @@ This approach:
    **Note:** 
    - For Single PR strategy: Skip this if PR already exists, just continue on same branch
    - For Separate PRs: Always sync before creating implementation PR
+   - If `upstream` remote doesn't exist, add it once:
+     ```bash
+     git remote add upstream git@github.com:project-kessel/inventory-api.git
+     ```
 
 3. **If Separate PRs:** Create implementation PR:
    ```bash
@@ -1119,10 +1138,11 @@ This approach:
    git branch -d RHCLOUD-45308-description
    git push origin --delete RHCLOUD-45308-description
    ```
-6. Checkout main and pull:
+6. Checkout main and pull from upstream:
    ```bash
    git checkout main
-   git pull origin main
+   git pull upstream main
+   git push origin main
    ```
 7. Final Jira update:
    ```
@@ -1284,6 +1304,12 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.4.2 (2026-04-20):
+  - **Critical Fix:** Changed all `git pull origin main` to `git pull upstream main`
+  - Syncs with canonical repo (upstream), not user's fork (origin)
+  - Added `git push origin main` after upstream pull to keep fork updated
+  - Added upstream remote setup instructions
+  - Affects: Stage 1, Stage 7, Stage 8.5.1, Stage 10
 - 1.4.1 (2026-04-20):
   - Added automatic sync with main before creating PRs
   - Stage 7: Sync before creating test PR
