@@ -1,10 +1,17 @@
 # PR Workflow Definition
 
-**Version:** 1.5.0  
+**Version:** 1.5.1  
 **Last Updated:** 2026-04-20  
 **Status:** Active
 
-**Recent Changes (v1.5.0):**
+**Recent Changes (v1.5.1):**
+- **Critical:** Added automatic prereq enforcement for commit/push commands
+- When user says "commit" or "push", Claude MUST run: lint → test → fresh review
+- Added Pre-Commit/Pre-Push Protocol section with enforcement rules
+- Never skip fresh context review unless explicitly told "commit without review"
+- Prevents workflow violations when using external tools (Cursor, etc.)
+
+**Changes (v1.5.0):**
 - **Major Feature:** Added git worktree support for isolated PR development
 - New configuration: `USE_WORKTREES=yes/no` (default: yes)
 - Work on multiple PRs simultaneously without branch switching
@@ -1370,32 +1377,95 @@ This approach:
 
 **CRITICAL:** All code changes (tests or implementation) MUST be reviewed by a fresh context agent BEFORE committing.
 
-### Before Every Commit
+### Automatic Prereq Enforcement
+
+**When user says "commit", "push", or "commit and push", Claude MUST automatically:**
+
+1. **Detect current workflow stage**
+   - Are we in Stage 8 (tests) or Stage 10 (implementation)?
+   - Enforce stage-appropriate prereqs
+
+2. **Run mandatory prereqs in order:**
+   ```bash
+   # Step 1: Run linter
+   make lint
+   # Must pass - if fails, report errors and stop
+   
+   # Step 2: Run tests
+   make test
+   # Must pass - if fails, report failures and stop
+   
+   # Step 3: Launch fresh context review agent
+   # Agent with NO prior knowledge reviews staged changes
+   # Must approve - if issues found, report and stop
+   ```
+
+3. **Only after ALL prereqs pass:**
+   ```bash
+   git commit -m "..."
+   git push  # if user requested push
+   ```
+
+**Emergency Override:**
+If user explicitly says "commit without review" or "skip review", Claude MUST:
+- Confirm: "Skipping fresh context review. Are you sure? (y/n)"
+- Only proceed if user confirms "y"
+- Add warning to commit message: "⚠️ Committed without fresh review"
+
+**Violations are NOT ALLOWED:**
+- ❌ Committing without running lint
+- ❌ Committing without running tests  
+- ❌ Committing without fresh context review
+- ❌ Assuming user wants to skip prereqs
+
+**Even if:**
+- User worked in Cursor/external tool
+- User says "just push the changes"
+- Changes seem trivial
+- Time pressure
+
+**Claude MUST enforce prereqs unless explicit "commit without review" override.**
+
+### Before Every Commit (Manual Process)
+
+If user invokes `/commit` skill or Claude runs automatic prereqs:
 
 1. **Stage changes:**
    ```bash
    git add [files]
    ```
 
-2. **Run fresh context review:**
-   - Launch agent with fresh context (no implementation knowledge)
-   - Agent reviews: `git diff --cached` (staged changes)
-   - Agent checks code quality, tests, security, patterns
-   - Agent approves or requests changes
-
-3. **Address issues if any**
-
-4. **Only after approval, commit:**
-   ```bash
-   git commit -m "..."
-   ```
-
-5. **Run linter:**
+2. **Run linter:**
    ```bash
    make lint
    ```
+   - Must pass before proceeding
 
-6. **Push:**
+3. **Run tests:**
+   ```bash
+   make test
+   ```
+   - Must pass before proceeding
+
+4. **Run fresh context review:**
+   - Launch agent with fresh context (no implementation knowledge)
+   - Agent reviews: `git diff --cached` (staged changes)
+   - Agent checks code quality, tests, security, patterns
+   - Agent creates review file (TEST_REVIEW.md or FINAL_CODE_REVIEW.md)
+   - Agent approves or requests changes
+
+5. **Address issues if any**
+   - Fix issues found by review
+   - Re-run lint and tests
+   - Re-review if changes significant
+
+6. **Only after approval, commit:**
+   ```bash
+   git commit -m "..."
+   ```
+   - Include "Reviewed-by: Fresh Context Agent" in commit message
+
+7. **Push:**
    ```bash
    git push
    ```
@@ -1527,6 +1597,12 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.5.1 (2026-04-20):
+  - **Critical:** Added automatic prereq enforcement for commit/push commands
+  - When user says "commit" or "push", Claude MUST run: lint → test → fresh review
+  - Enhanced Pre-Commit/Pre-Push Protocol with enforcement rules
+  - Added emergency override mechanism ("commit without review")
+  - Prevents workflow violations when using external tools (Cursor, etc.)
 - 1.5.0 (2026-04-20):
   - **Major Feature:** Added git worktree support for isolated PR development
   - New `USE_WORKTREES` configuration (default: yes)
