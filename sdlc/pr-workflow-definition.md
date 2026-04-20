@@ -1,10 +1,16 @@
 # PR Workflow Definition
 
-**Version:** 1.4.0  
+**Version:** 1.4.1  
 **Last Updated:** 2026-04-20  
 **Status:** Active
 
-**Recent Changes (v1.4.0):**
+**Recent Changes (v1.4.1):**
+- Added automatic sync with main before creating PRs (Stage 7 and Stage 10)
+- Ensures all PRs are based on latest main
+- Prevents merge conflicts and keeps history clean
+- Required step before `gh pr create` commands
+
+**Changes (v1.4.0):**
 - **Breaking:** Changed from `PLAN.md` to `PLAN-${JIRA_TICKET}.md` (e.g., `PLAN-RHCLOUD-45010.md`)
 - Allows multiple concurrent PRs without file conflicts
 - Added guidance on referencing Cursor plans from workflow PLAN files
@@ -464,12 +470,24 @@ This approach:
 **Goal:** Get test plan reviewed before implementation
 
 **Actions:**
-1. Extract JIRA ticket from branch name:
+1. **Sync with main before creating PR:**
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout RHCLOUD-45308-description
+   git rebase main
+   # Resolve conflicts if any
+   git push --force-with-lease
+   ```
+   
+   **Why:** Ensures PR is based on latest main, prevents merge conflicts, keeps history clean
+
+2. Extract JIRA ticket from branch name:
    - Branch format: `RHCLOUD-45308-description`
    - Extract: `RHCLOUD-45308`
    - If extraction fails, ask user for JIRA ticket
 
-2. Create PR with JIRA ticket in title:
+3. Create PR with JIRA ticket in title:
    ```bash
    # Title format: "JIRA-TICKET: brief-description"
    gh pr create \
@@ -499,7 +517,7 @@ This approach:
 
    **IMPORTANT:** PR title MUST include JIRA ticket number. GitHub workflow checks require this format.
 
-2. Add comment to Jira:
+4. Add comment to Jira:
    ```
    PR created: [PR URL]
    
@@ -507,7 +525,7 @@ This approach:
    Comment /lgtm on PR to approve and proceed to test implementation.
    ```
 
-3. Wait for approval:
+5. Wait for approval:
    - Poll PR comments for `/lgtm`
    - Or user tells Claude "test plan approved"
 
@@ -813,7 +831,21 @@ This approach:
 **Actions:**
 1. Confirm implementation plan approval (`/lgtm`)
 
-2. **If Separate PRs:** Create implementation PR first:
+2. **Sync with main before creating PR (if creating new PR):**
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout RHCLOUD-45308-implement-[description]
+   git rebase main
+   # Resolve conflicts if any
+   git push --force-with-lease
+   ```
+   
+   **Note:** 
+   - For Single PR strategy: Skip this if PR already exists, just continue on same branch
+   - For Separate PRs: Always sync before creating implementation PR
+
+3. **If Separate PRs:** Create implementation PR:
    ```bash
    gh pr create \
      --title "RHCLOUD-45308: Implement [description]" \
@@ -826,16 +858,16 @@ This approach:
    See \`PLAN-RHCLOUD-45308.md\` for implementation details."
    ```
 
-3. Implement following TDD Red-Green-Refactor:
+4. Implement following TDD Red-Green-Refactor:
    - **RED:** Tests already fail (done in Stage 8)
    - **GREEN:** Write minimal code to make tests pass
    - **REFACTOR:** Clean up code while keeping tests passing
 
-4. Implement phase by phase from plan
+5. Implement phase by phase from plan
 
-5. **BEFORE each commit:** Run fresh context code review (similar to Stage 8.5)
+6. **BEFORE each commit:** Run fresh context code review (similar to Stage 8.5)
 
-6. After review approval, commit logically:
+7. After review approval, commit logically:
    ```bash
    git commit -m "RHCLOUD-45308: Implement [phase name]
    
@@ -848,18 +880,18 @@ This approach:
    Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
    ```
 
-7. After all phases:
+8. After all phases:
    - Run full test suite: `make test`
    - Verify all tests pass
    - Run linter: `make lint`
    - Check test coverage
 
-8. Push:
+9. Push:
    ```bash
    git push
    ```
 
-9. Update PR:
+10. Update PR:
    ```markdown
    ### Stage: Implementation Complete
    
@@ -1252,6 +1284,11 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.4.1 (2026-04-20):
+  - Added automatic sync with main before creating PRs
+  - Stage 7: Sync before creating test PR
+  - Stage 10: Sync before creating implementation PR
+  - Prevents merge conflicts and ensures PR based on latest main
 - 1.4.0 (2026-04-20):
   - **Breaking:** Changed from `PLAN.md` to `PLAN-${JIRA_TICKET}.md` for multi-PR support
   - Updated all stages to use per-ticket plan files (e.g., `PLAN-RHCLOUD-45010.md`)
