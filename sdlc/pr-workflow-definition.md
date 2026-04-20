@@ -1,10 +1,22 @@
 # PR Workflow Definition
 
-**Version:** 1.4.2  
+**Version:** 1.5.0  
 **Last Updated:** 2026-04-20  
 **Status:** Active
 
-**Recent Changes (v1.4.2):**
+**Recent Changes (v1.5.0):**
+- **Major Feature:** Added git worktree support for isolated PR development
+- New configuration: `USE_WORKTREES=yes/no` (default: yes)
+- Work on multiple PRs simultaneously without branch switching
+- Main branch stays pristine and read-only in worktree mode
+- New shell functions: `create-workflow-worktree`, `list-workflow-worktrees`, `switch-to-worktree`, `cleanup-workflow-worktree`
+- Updated Stage 1: Git Safety Check supports worktree mode
+- Updated Stage 1.5: Smart detection of current location (main vs worktree)
+- Updated Stage 3: Branch creation in worktrees
+- Updated Stage 13: Automatic worktree cleanup after merge
+- Backwards compatible: Set `USE_WORKTREES=no` for classic workflow
+
+**Changes (v1.4.2):**
 - **Critical Fix:** Changed sync to use `upstream main` instead of `origin main`
 - Ensures syncing with canonical repo, not just user's fork
 - Added upstream remote setup instructions
@@ -54,7 +66,35 @@ The PR workflow is an opinionated, test-first process that ensures:
 
 ### Stage 1: Git Safety Check
 
-**Goal:** Ensure clean slate for new work
+**Goal:** Ensure main branch is up to date and current location is clean
+
+**Behavior depends on `USE_WORKTREES` configuration:**
+
+#### When `USE_WORKTREES=yes` (default):
+
+**Actions:**
+1. Check current git branch
+2. If on `main`:
+   - Check for uncommitted changes (give 3 attempts to stash)
+3. If on feature branch (worktree):
+   - Note current branch for Stage 1.5
+   - Don't enforce switching to main
+4. Ensure main branch is up to date:
+   - Switch to main temporarily (if not already there)
+   - Pull latest from upstream (`git pull upstream main`)
+   - Push to origin (`git push origin main`)
+   - Switch back to original branch (if applicable)
+5. Display sync details:
+   - Main branch commit hash
+   - Commits pulled (if any)
+   - Current location (main or feature branch)
+
+**Success Criteria:**
+- Main branch has latest changes from upstream
+- Current working tree clean (wherever you are)
+- Ready to create worktree OR continue current work
+
+#### When `USE_WORKTREES=no` (classic mode):
 
 **Actions:**
 1. Check current git branch
@@ -89,6 +129,85 @@ The PR workflow is an opinionated, test-first process that ensures:
 
 **Goal:** Determine if starting fresh or continuing existing work
 
+**Behavior depends on `USE_WORKTREES` configuration and current location:**
+
+#### When `USE_WORKTREES=yes`:
+
+**If currently on main branch:**
+
+Claude asks:
+```
+You're on main branch.
+
+What would you like to do?
+1. Start new PR (creates isolated worktree)
+2. Continue existing PR (switch to worktree)
+3. List all active worktrees
+
+Choice (1/2/3):
+```
+
+**Option 1 (New PR):**
+- Continue to Stage 2 (Jira Search)
+- After Jira selection and branch naming, create worktree:
+  ```bash
+  create-workflow-worktree JIRA-123 'branch-description'
+  ```
+- This creates `.claude/worktrees/JIRA-123-branch-description/`
+- Switches into worktree automatically
+- Proceed with workflow inside worktree
+
+**Option 2 (Continue Existing):**
+- List available worktrees
+- User selects which worktree to enter
+- Switch to selected worktree
+- Load context and ask what to do next
+
+**Option 3 (List Worktrees):**
+- Show all active worktrees with:
+  - Jira ticket
+  - Branch name
+  - Path
+  - Current status
+- Return to choice prompt
+
+**If currently on feature branch (in a worktree):**
+
+Claude detects and displays:
+```
+You're currently working on: RHCLOUD-45010-authz-refactor
+
+What would you like to do?
+1. Start new PR (creates another worktree, keeps current work isolated)
+2. Continue work on RHCLOUD-45010-authz-refactor
+3. Switch to different worktree
+4. Return to main branch
+
+Choice (1/2/3/4):
+```
+
+**Option 1 (New PR in worktree):**
+- Main stays synced, current worktree untouched
+- Continue to Stage 2 (Jira Search)
+- Create new worktree for new PR
+- Current work remains isolated and safe
+
+**Option 2 (Continue current):**
+- Stay in current worktree
+- Load context: PLAN-${JIRA_TICKET}.md, PR, commits
+- Ask what stage to resume
+
+**Option 3 (Switch worktree):**
+- List available worktrees
+- Switch to selected one
+- Load context for that PR
+
+**Option 4 (Return to main):**
+- Navigate back to main repo directory
+- Main branch is read-only, never worked on directly
+
+#### When `USE_WORKTREES=no` (classic mode):
+
 **Actions:**
 1. After git safety check completes, Claude asks:
    ```
@@ -115,13 +234,16 @@ The PR workflow is an opinionated, test-first process that ensures:
    - Load context: Read PLAN-${JIRA_TICKET}.md, PR description, recent commits
 
 **Success Criteria:**
-- User's intent is clear (new vs existing)
+- User's intent is clear (new vs existing vs switch)
 - For existing: context loaded (branch, PR, Jira, PLAN-${JIRA_TICKET}.md)
+- For worktrees: correct worktree activated and ready
 
 **Error Handling:**
 - Branch name doesn't match pattern → Ask for Jira ticket manually
 - No PR found → Offer to create PR
 - No PLAN-${JIRA_TICKET}.md found → Offer to create one
+- Worktree creation fails → Fall back to creating branch directly
+- No worktrees found → Offer to create first one
 
 ---
 
@@ -183,7 +305,61 @@ The PR workflow is an opinionated, test-first process that ensures:
 
 ### Stage 3: Branch Creation
 
-**Goal:** Create properly named feature branch
+**Goal:** Create properly named feature branch (in worktree or directly)
+
+**Behavior depends on `USE_WORKTREES` configuration:**
+
+#### When `USE_WORKTREES=yes`:
+
+**Actions:**
+1. Display ticket summary:
+   ```
+   Ticket: RHCLOUD-45308
+   Summary: Embed SpiceDB repository and tests in inventory-api
+   ```
+2. Ask user:
+   ```
+   Branch description:
+   1. Use default: "embed-spicedb-repository-and-tests"
+   2. Provide custom description
+   
+   Choice (1/2):
+   ```
+3. If custom:
+   - Prompt: `"Enter branch description:"`
+   - Slugify input (lowercase, spaces→dashes, remove special chars)
+4. Create branch name: `${JIRA_TICKET}-${description}`
+   - Example: `RHCLOUD-45308-embed-spicedb-repository`
+5. Create worktree with branch:
+   ```bash
+   create-workflow-worktree RHCLOUD-45308 "embed-spicedb-repository"
+   ```
+   This creates:
+   - Path: `.claude/worktrees/RHCLOUD-45308-embed-spicedb-repository/`
+   - Branch: `RHCLOUD-45308-embed-spicedb-repository` (from main)
+   - Switches into worktree automatically
+6. Confirm:
+   ```
+   ✓ Worktree created: .claude/worktrees/RHCLOUD-45308-embed-spicedb-repository
+   ✓ Branch: RHCLOUD-45308-embed-spicedb-repository
+   ✓ Current directory: <worktree-path>
+   
+   Your main branch and other worktrees remain untouched.
+   ```
+
+**Success Criteria:**
+- Worktree created with proper structure
+- Branch created with format: `JIRA-123-description`
+- Working inside worktree directory
+- Branch name is valid (no special characters, reasonable length)
+
+**Error Handling:**
+- Worktree already exists → Offer to switch to existing or create with suffix
+- Invalid characters → Clean automatically
+- Too long (>100 chars) → Truncate and confirm with user
+- Worktree creation fails → Abort workflow, offer to disable worktrees
+
+#### When `USE_WORKTREES=no` (classic mode):
 
 **Actions:**
 1. Display ticket summary:
@@ -1107,7 +1283,7 @@ This approach:
 
 ### Stage 13: Final Approval & Merge
 
-**Goal:** Get human approval and merge to main
+**Goal:** Get human approval, merge to main, and clean up
 
 **Actions:**
 1. Wait for GitHub approval (not just `/lgtm` comment)
@@ -1133,18 +1309,47 @@ This approach:
    gh pr merge --squash
    ```
    Or via GitHub UI (preferred if complex)
-5. Delete feature branch (after merge):
-   ```bash
-   git branch -d RHCLOUD-45308-description
-   git push origin --delete RHCLOUD-45308-description
-   ```
-6. Checkout main and pull from upstream:
-   ```bash
-   git checkout main
-   git pull upstream main
-   git push origin main
-   ```
-7. Final Jira update:
+
+5. **Cleanup based on `USE_WORKTREES` setting:**
+
+   **If `USE_WORKTREES=yes`:**
+   - Clean up the worktree:
+     ```bash
+     cleanup-workflow-worktree RHCLOUD-45308
+     ```
+     This:
+     - Switches back to main repo directory
+     - Removes the worktree directory
+     - Deletes the feature branch
+     - Confirms cleanup
+   - Pull latest main:
+     ```bash
+     git checkout main  # (if not already there)
+     git pull upstream main
+     git push origin main
+     ```
+   - Confirm:
+     ```
+     ✓ Worktree cleaned up: .claude/worktrees/RHCLOUD-45308-description
+     ✓ Branch deleted: RHCLOUD-45308-description
+     ✓ Main branch updated
+     ✓ Ready for next PR
+     ```
+
+   **If `USE_WORKTREES=no`:**
+   - Delete feature branch:
+     ```bash
+     git branch -d RHCLOUD-45308-description
+     git push origin --delete RHCLOUD-45308-description
+     ```
+   - Checkout main and pull from upstream:
+     ```bash
+     git checkout main
+     git pull upstream main
+     git push origin main
+     ```
+
+6. Final Jira update:
    ```
    ✅ PR merged to main: [PR URL]
    
@@ -1154,8 +1359,10 @@ This approach:
 **Success Criteria:**
 - PR merged to main
 - Feature branch deleted
+- Worktree cleaned up (if applicable)
 - On main branch with latest changes
 - Jira ticket updated
+- Ready to start next PR
 
 ---
 
@@ -1242,6 +1449,22 @@ Workflow behavior controlled by:
   - `DEFAULT_PROJECT` - Jira project to search
   - `DEFAULT_SEARCH_SCOPE` - Search scope (your_tickets, team_tickets, all)
   - `DEFAULT_SLACK_CHANNEL` - Slack notifications (future)
+  - `USE_WORKTREES` - Enable worktree-based workflow (yes/no, default: yes)
+  - `WORKTREE_BASE_PATH` - Where to create worktrees (default: .claude/worktrees)
+
+**Worktree Configuration:**
+- **`USE_WORKTREES=yes`** (recommended): All PR work happens in isolated worktrees
+  - Main branch stays pristine and read-only
+  - Work on multiple PRs simultaneously without branch switching
+  - Each PR gets its own directory: `.claude/worktrees/JIRA-123-description/`
+  - Easy to switch between different PRs
+  - Automatic cleanup after PR merge
+
+- **`USE_WORKTREES=no`** (classic mode): Traditional branch-based workflow
+  - Work directly on branches in main repository
+  - Must switch branches to work on different PRs
+  - Main branch is checked out and worked on directly
+  - Compatible with existing workflows
   
 ---
 
@@ -1304,6 +1527,14 @@ To customize this workflow:
 ---
 
 **Version History:**
+- 1.5.0 (2026-04-20):
+  - **Major Feature:** Added git worktree support for isolated PR development
+  - New `USE_WORKTREES` configuration (default: yes)
+  - Work on multiple PRs simultaneously in isolated directories
+  - Main branch stays pristine in worktree mode
+  - New worktree management functions
+  - Updated Stages 1, 1.5, 3, and 13 for worktree support
+  - Fully backwards compatible with classic workflow
 - 1.4.2 (2026-04-20):
   - **Critical Fix:** Changed all `git pull origin main` to `git pull upstream main`
   - Syncs with canonical repo (upstream), not user's fork (origin)
