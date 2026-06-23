@@ -2,14 +2,11 @@
 name: breaking-changes
 description: Detect breaking changes across API, database, config, behavior, and integrations
 args: "all | api | database | config | behavior | integration"
-context: fork
-agent: Explore
-allowed-tools: Bash(git *) Read Glob Grep
 ---
 
 # Breaking Change Detection for Kessel Inventory API
 
-Analyze changes for breaking changes across multiple dimensions, enforcing domain guidelines from AGENTS.md.
+You are analyzing code changes for breaking changes across multiple dimensions. Follow the domain guidelines from AGENTS.md.
 
 ## Scope Selection
 
@@ -23,19 +20,19 @@ Run specific checks based on args:
 - `behavior`: Only behavior breaking changes
 - `integration`: Only integration breaking changes
 
-## Current Changes
+## Step 1: Understand the Changes
 
-First, get the current diff to analyze:
+Use the Bash tool to get an overview of what changed:
 
-!`git diff HEAD --no-color 2>/dev/null || echo "No changes in working directory"`
+```bash
+git diff main...HEAD --stat
+```
 
-If no changes in working directory, check the current branch against main:
+This shows you which files changed and how much.
 
-!`git diff main...HEAD --no-color 2>/dev/null || echo "No branch diff available"`
+## Step 2: Run the Appropriate Checks
 
-Also list modified files for context:
-
-!`git status --short 2>/dev/null || echo "Not in git repository"`
+Based on the args parameter and the files that changed, run the relevant checks below.
 
 ---
 
@@ -75,15 +72,13 @@ Examine changes to `.proto` files for:
 
 ### How to Check
 
-!`git diff HEAD --no-color -- '*.proto' | head -300`
+Use the Bash tool:
 
-If no diff in working directory, check branch diff:
+```bash
+git diff main...HEAD -- '*.proto'
+```
 
-!`git diff main...HEAD --no-color -- '*.proto' | head -300`
-
-Also check if buf.build detected breaking changes:
-
-!`make api 2>&1 | grep -i "breaking" || echo "No buf breaking change warnings"`
+Read any changed proto files with the Read tool to see the full context.
 
 ### Analysis
 
@@ -142,15 +137,19 @@ Examine migration files for:
 
 ### How to Check
 
-!`git diff HEAD --no-color -- 'internal/data/migrations/*.go' '*.sql' | head -300`
+Use the Bash tool:
 
-If no diff in working directory:
+```bash
+git diff main...HEAD -- 'internal/data/migrations/*.go' '*.sql'
+```
 
-!`git diff main...HEAD --no-color -- 'internal/data/migrations/*.go' '*.sql' | head -300`
+List new migration files:
 
-Check for new migration files:
+```bash
+git diff main...HEAD --name-only -- 'internal/data/migrations/'
+```
 
-!`git diff main...HEAD --name-only -- 'internal/data/migrations/*.go' | grep -v "^$"`
+Read the migration files with the Read tool to analyze them.
 
 ### Analysis
 
@@ -210,15 +209,13 @@ Examine config changes for:
 
 ### How to Check
 
-!`git diff HEAD --no-color -- 'cmd/root.go' 'internal/config/*.go' 'development/configs/*.yaml' 'development/*.yaml' | head -300`
+Use the Bash tool:
 
-If no diff:
+```bash
+git diff main...HEAD -- 'cmd/root.go' 'internal/config/*.go' 'development/configs/*.yaml'
+```
 
-!`git diff main...HEAD --no-color -- 'cmd/root.go' 'internal/config/*.go' 'development/configs/*.yaml' 'development/*.yaml' | head -300`
-
-Check for CLI flag changes:
-
-!`git diff HEAD --no-color -- 'cmd/*.go' | grep -E "(Flag|Env|Default)" | head -50`
+Read the changed config files with the Read tool.
 
 ### Analysis
 
@@ -283,15 +280,19 @@ Examine code changes for behavioral breaks:
 
 ### How to Check
 
-!`git diff HEAD --no-color -- 'internal/biz/*.go' 'internal/service/*.go' | head -400`
+Use the Bash tool:
 
-If no diff:
+```bash
+git diff main...HEAD -- 'internal/biz/*.go' 'internal/service/*.go'
+```
 
-!`git diff main...HEAD --no-color -- 'internal/biz/*.go' 'internal/service/*.go' | head -400`
+For model changes specifically:
 
-Check for signature changes in public interfaces:
+```bash
+git diff main...HEAD -- 'internal/biz/model/*.go'
+```
 
-!`git diff HEAD --no-color -- 'internal/biz/model/*.go' | grep -E "(^-func|^+func|^-type|^+type)" | head -100`
+Read the changed files with the Read tool to analyze function signatures and behavior.
 
 ### Analysis
 
@@ -358,19 +359,19 @@ Examine integration point changes:
 
 ### How to Check
 
-!`git diff HEAD --no-color -- 'internal/eventing/*.go' 'internal/relations/*.go' 'go.mod' | head -300`
+Use the Bash tool:
 
-If no diff:
+```bash
+git diff main...HEAD -- 'internal/eventing/*.go' 'internal/relations/*.go' 'go.mod'
+```
 
-!`git diff main...HEAD --no-color -- 'internal/eventing/*.go' 'internal/relations/*.go' 'go.mod' | head -300`
+For Kafka consumers:
 
-Check Kafka consumer changes:
+```bash
+git diff main...HEAD -- 'internal/service/consumer/*.go'
+```
 
-!`git diff HEAD --no-color -- 'internal/service/consumer/*.go' | head -200`
-
-Check go.mod for dependency bumps:
-
-!`git diff HEAD --no-color -- 'go.mod' | grep -E "^[-+]" | grep -v "//" | head -50`
+Read the changed files with the Read tool.
 
 ### Analysis
 
